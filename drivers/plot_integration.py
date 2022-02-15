@@ -24,7 +24,7 @@ p.plot_integration(
     movie_durn=60*u.second
 )
 
-# takes like 20 minutes to write(!!)
+# takes 30 minutes to write(!!)
 p.plot_integration(
     clusterid, plotdir, n_steps=int(20e3), dt=0.05*u.Myr, rv_method='fix',
     movie_durn=180*u.second

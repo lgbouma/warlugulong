@@ -174,10 +174,25 @@ def plot_integration(clusterid, plotdir, n_steps=int(2e3), dt=-0.05*u.Myr,
     else:
         LOGINFO(f'Found {outpath}, skipping.')
 
+    # make a movie
+    outpath = join(
+        plotdir,
+        f'shapes_{clusterid}_{rv_method}_N{n_steps}_dt{dt}.mp4'
+    )
+    outpath = outpath.replace(' ','_')
+
+    if not os.path.exists(outpath):
+        given_orbits_make_movie(orbits, times, outpath, movie_durn=movie_durn,
+                                median_subtract=1)
+    else:
+        LOGINFO(f'Found {outpath}, skipping.')
+
+
 
 def given_orbits_make_movie(
     orbits, times, outpath,
-    movie_durn=60*u.second # movie run-time (frame-rate is scaled accordingly)
+    movie_durn=60*u.second, # movie run-time (frame-rate is scaled accordingly)
+    median_subtract=0
 ):
 
     import matplotlib.animation as animation
@@ -185,35 +200,46 @@ def given_orbits_make_movie(
     # set up axes and limits
     fig, axs = plt.subplots(figsize=(12,4), ncols=3)
 
-    dx = np.max(orbits.x) - np.min(orbits.x)
-    dy = np.max(orbits.y) - np.min(orbits.y)
-    dz = np.max(orbits.z) - np.min(orbits.z)
+    if not median_subtract:
+        # show the orbits in XYZ galactic space
+        x = orbits.x
+        y = orbits.y
+        z = orbits.z
+    else:
+        # show the median-subtracted orbits, to focus on the morphology
+        x = orbits.x - np.nanmedian(orbits.x, axis=1)[:, None]
+        y = orbits.y - np.nanmedian(orbits.y, axis=1)[:, None]
+        z = orbits.z - np.nanmedian(orbits.z, axis=1)[:, None]
+
+    dx = np.max(x) - np.min(x)
+    dy = np.max(y) - np.min(y)
+    dz = np.max(z) - np.min(z)
 
     # axs0: Y vs X
     # axs1: Z vs X
     # axs1: Z vs Y
-    axs[0].set_xlim([ (np.min(orbits.x)-0.1*dx).to(u.kpc).value, (np.max(orbits.x)+0.1*dx).to(u.kpc).value ])
-    axs[0].set_ylim([ (np.min(orbits.y)-0.1*dy).to(u.kpc).value, (np.max(orbits.y)+0.1*dy).to(u.kpc).value ])
-    axs[1].set_xlim([ (np.min(orbits.x)-0.1*dx).to(u.kpc).value, (np.max(orbits.x)+0.1*dx).to(u.kpc).value ])
-    axs[1].set_ylim([ (np.min(orbits.z)-0.1*dz).to(u.kpc).value, (np.max(orbits.z)+0.1*dz).to(u.kpc).value ])
-    axs[2].set_xlim([ (np.min(orbits.y)-0.1*dy).to(u.kpc).value, (np.max(orbits.y)+0.1*dy).to(u.kpc).value ])
-    axs[2].set_ylim([ (np.min(orbits.z)-0.1*dz).to(u.kpc).value, (np.max(orbits.z)+0.1*dz).to(u.kpc).value ])
+    axs[0].set_xlim([ (np.min(x)-0.1*dx).to(u.kpc).value, (np.max(x)+0.1*dx).to(u.kpc).value ])
+    axs[0].set_ylim([ (np.min(y)-0.1*dy).to(u.kpc).value, (np.max(y)+0.1*dy).to(u.kpc).value ])
+    axs[1].set_xlim([ (np.min(x)-0.1*dx).to(u.kpc).value, (np.max(x)+0.1*dx).to(u.kpc).value ])
+    axs[1].set_ylim([ (np.min(z)-0.1*dz).to(u.kpc).value, (np.max(z)+0.1*dz).to(u.kpc).value ])
+    axs[2].set_xlim([ (np.min(y)-0.1*dy).to(u.kpc).value, (np.max(y)+0.1*dy).to(u.kpc).value ])
+    axs[2].set_ylim([ (np.min(z)-0.1*dz).to(u.kpc).value, (np.max(z)+0.1*dz).to(u.kpc).value ])
 
     axs[0].update({'xlabel': 'X [kpc]', 'ylabel': 'Y [kpc]'})
     axs[1].update({'xlabel': 'X [kpc]', 'ylabel': 'Z [kpc]'})
     axs[2].update({'xlabel': 'Y [kpc]', 'ylabel': 'Z [kpc]'})
 
     # get initial data to plot for first frame
-    x = orbits.x[0,:].to(u.kpc).value
-    y = orbits.y[0,:].to(u.kpc).value
-    z = orbits.z[0,:].to(u.kpc).value
+    _x = x[0,:].to(u.kpc).value
+    _y = y[0,:].to(u.kpc).value
+    _z = z[0,:].to(u.kpc).value
 
     numframes = orbits.shape[0]
     numpoints = orbits.shape[1]
 
-    scat0 = axs[0].scatter(x, y, c='k', s=1, rasterized=True)
-    scat1 = axs[1].scatter(x, z, c='k', s=1, rasterized=True)
-    scat2 = axs[2].scatter(y, z, c='k', s=1, rasterized=True)
+    scat0 = axs[0].scatter(_x, _y, c='k', s=1, rasterized=True)
+    scat1 = axs[1].scatter(_x, _z, c='k', s=1, rasterized=True)
+    scat2 = axs[2].scatter(_y, _z, c='k', s=1, rasterized=True)
 
     txt = axs[0].text(0.03, 0.03, f't={times[0].to(u.Myr).value:.2f} Myr',
                       transform=axs[0].transAxes, ha='left',va='bottom',
@@ -232,16 +258,16 @@ def given_orbits_make_movie(
         update_plot, # function to call at each frame
         frames=range(numframes),
         interval=frame_interval,  # delay btwn frames (msec)
-        fargs=(orbits, times, scat0, scat1, scat2, txt)
+        fargs=(x,y,z, times, scat0, scat1, scat2, txt)
     )
     ani.save(outpath)
     LOGINFO(f'Wrote {outpath}')
 
-def update_plot(i, orbits, times, scat0, scat1, scat2, txt):
+def update_plot(i, x,y,z, times, scat0, scat1, scat2, txt):
 
-    scat0.set_offsets(np.c_[orbits.x[i,:], orbits.y[i,:]])
-    scat1.set_offsets(np.c_[orbits.x[i,:], orbits.z[i,:]])
-    scat2.set_offsets(np.c_[orbits.y[i,:], orbits.z[i,:]])
+    scat0.set_offsets(np.c_[x[i,:], y[i,:]])
+    scat1.set_offsets(np.c_[x[i,:], z[i,:]])
+    scat2.set_offsets(np.c_[y[i,:], z[i,:]])
     txt.set_text(f't={times[i].to(u.Myr).value:.2f} Myr')
 
     return scat0, scat1, scat2, txt,
