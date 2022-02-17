@@ -15,6 +15,11 @@ if not os.path.exists(plotdir):
     os.mkdir(plotdir)
 
 p.plot_integration(
+    clusterid, plotdir, n_steps=int(1e3), dt=-0.02*u.Myr, rv_method='fix',
+    movie_durn=60*u.second
+)
+
+p.plot_integration(
     clusterid, plotdir, n_steps=int(1e3), dt=-0.01*u.Myr, rv_method='fix',
     movie_durn=60*u.second
 )
